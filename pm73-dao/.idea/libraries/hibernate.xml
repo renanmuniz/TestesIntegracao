@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="hibernate">
+    <CLASSES>
+      <root url="file://$USER_HOME$/Downloads/pm73-dao/pm73-dao/lib/hibernate" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+    <jarDirectory url="file://$USER_HOME$/Downloads/pm73-dao/pm73-dao/lib/hibernate" recursive="false" />
+  </library>
+</component>
