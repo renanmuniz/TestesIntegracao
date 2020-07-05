@@ -4,6 +4,7 @@ import br.com.caelum.pm73.dao.CriadorDeSessao;
 import br.com.caelum.pm73.dao.LeilaoDao;
 import br.com.caelum.pm73.dao.UsuarioDao;
 import br.com.caelum.pm73.dominio.Leilao;
+import br.com.caelum.pm73.dominio.LeilaoBuilder;
 import br.com.caelum.pm73.dominio.Usuario;
 import org.hibernate.Session;
 import org.junit.After;
@@ -14,51 +15,75 @@ import org.junit.Test;
 import java.util.Calendar;
 import java.util.List;
 
-public class LeilaoDaoTest {
-    private UsuarioDao usuarioDao;
+public class LeilaoDaoTests {
     private Session session;
     private LeilaoDao leilaoDao;
+    private UsuarioDao usuarioDao;
 
     @Before
-    public void antes(){
+    public void antes() {
         session = new CriadorDeSessao().getSession();
+        leilaoDao = new LeilaoDao(session);
         usuarioDao = new UsuarioDao(session);
 
-        leilaoDao = new LeilaoDao(session);
-
+        // inicia transacao
         session.beginTransaction();
-
-        System.out.println("abrindo sessão...");
     }
 
     @After
-    public void depois(){
+    public void depois() {
+        // faz o rollback
         session.getTransaction().rollback();
         session.close();
-
-        System.out.println("fazendo rollback...");
-        System.out.println("fechando sessão...");
     }
 
     @Test
-    public void deveContarLeiloesNaoEncerradors() {
+    public void deveContarLeiloesNaoEncerrados() {
+        // criamos um usuario
+        Usuario mauricio = new Usuario("Mauricio Aniche",
+                "mauricio@aniche.com.br");
 
-        Usuario mauricio = new Usuario("Mauricio", "mauricio@mauricio.com.br");
+        // criamos os dois leiloes
 
-        Leilao ativo = new Leilao("Geladeira",1500.0,mauricio,false);
-        Leilao encerrado = new Leilao("XBox",700.0,mauricio,false);
+        Leilao ativo = new LeilaoBuilder()
+                .comDono(mauricio)
+                .constroi();
+        Leilao encerrado = new LeilaoBuilder()
+                .comDono(mauricio)
+                .encerrado()
+                .constroi();
 
-        ativo.encerra();
-        encerrado.encerra();
-
+        // persistimos todos no banco
         usuarioDao.salvar(mauricio);
         leilaoDao.salvar(ativo);
         leilaoDao.salvar(encerrado);
 
+        // pedimos o total para o DAO
         long total = leilaoDao.total();
 
-        Assert.assertEquals(0L,total);
+        Assert.assertEquals(1L, total);
+    }
 
+    @Test
+    public void deveRetornarZeroSeNaoHaLeiloesNovos() {
+        Usuario mauricio = new Usuario("Mauricio Aniche",
+                "mauricio@aniche.com.br");
+
+        Leilao encerrado = new LeilaoBuilder()
+                .comDono(mauricio)
+                .encerrado()
+                .constroi();
+        Leilao tambemEncerrado = new LeilaoBuilder()
+                .comDono(mauricio)
+                .encerrado().constroi();
+
+        usuarioDao.salvar(mauricio);
+        leilaoDao.salvar(encerrado);
+        leilaoDao.salvar(tambemEncerrado);
+
+        long total = leilaoDao.total();
+
+        Assert.assertEquals(0L, total);
     }
 
     @Test
@@ -67,9 +92,15 @@ public class LeilaoDaoTest {
                 "mauricio@aniche.com.br");
 
         Leilao produtoNovo =
-                new Leilao("XBox", 700.0, mauricio, false);
+                new LeilaoBuilder()
+                        .comDono(mauricio)
+                        .comNome("XBox")
+                        .constroi();
         Leilao produtoUsado =
-                new Leilao("Geladeira", 1500.0, mauricio,true);
+                new LeilaoBuilder().comNome("XBox")
+                        .comDono(mauricio)
+                        .usado()
+                        .constroi();
 
         usuarioDao.salvar(mauricio);
         leilaoDao.salvar(produtoNovo);
@@ -86,17 +117,15 @@ public class LeilaoDaoTest {
         Usuario mauricio = new Usuario("Mauricio Aniche",
                 "mauricio@aniche.com.br");
 
-        Leilao recente =
-                new Leilao("XBox", 700.0, mauricio, false);
-        Leilao antigo =
-                new Leilao("Geladeira", 1500.0, mauricio,true);
-
-        Calendar dataRecente = Calendar.getInstance();
-        Calendar dataAntiga = Calendar.getInstance();
-        dataAntiga.add(Calendar.DAY_OF_MONTH, -10);
-
-        recente.setDataAbertura(dataRecente);
-        antigo.setDataAbertura(dataAntiga);
+        Leilao recente = new LeilaoBuilder()
+                .comNome("XBox")
+                .comDono(mauricio)
+                .constroi();
+        Leilao antigo = new LeilaoBuilder()
+                .comDono(mauricio)
+                .comNome("Geladeira")
+                .diasAtras(10)
+                .constroi();
 
         usuarioDao.salvar(mauricio);
         leilaoDao.salvar(recente);
@@ -113,8 +142,10 @@ public class LeilaoDaoTest {
         Usuario mauricio = new Usuario("Mauricio Aniche",
                 "mauricio@aniche.com.br");
 
-        Leilao noLimite =
-                new Leilao("XBox", 700.0, mauricio, false);
+        Leilao noLimite = new LeilaoBuilder()
+                .diasAtras(7)
+                .comDono(mauricio)
+                .constroi();
 
         Calendar dataAntiga = Calendar.getInstance();
         dataAntiga.add(Calendar.DAY_OF_MONTH, -7);
@@ -132,78 +163,26 @@ public class LeilaoDaoTest {
     @Test
     public void deveTrazerLeiloesNaoEncerradosNoPeriodo() {
 
-        Calendar comecoDoIntervalo = Calendar.getInstance();
-        comecoDoIntervalo.add(Calendar.DAY_OF_MONTH,-10);
-
-        Calendar fimDoIntervalo = Calendar.getInstance();
-
-        Usuario mauricio = new Usuario("Mauricio","mauricio@mauirioc.com.br");
-
-        Leilao leilao1 = new Leilao("XBox", 700.0, mauricio, false);
-        Calendar dataDoLeilao1 = Calendar.getInstance();
-        dataDoLeilao1.add(Calendar.DAY_OF_MONTH,-2);
-        leilao1.setDataAbertura(dataDoLeilao1);
-
-        Leilao leilao2 = new Leilao("Geladeira", 1700.0, mauricio, false);
-        Calendar dataDoLeilao2 = Calendar.getInstance();
-        dataDoLeilao2.add(Calendar.DAY_OF_MONTH,-20);
-        leilao2.setDataAbertura(dataDoLeilao2);
-
-        usuarioDao.salvar(mauricio);
-        leilaoDao.salvar(leilao1);
-        leilaoDao.salvar(leilao2);
-
-        List<Leilao> leiloes = leilaoDao.porPeriodo(comecoDoIntervalo,fimDoIntervalo);
-
-        Assert.assertEquals(1, leiloes.size());
-        Assert.assertEquals("XBox",leiloes.get(0).getNome());
-    }
-
-    @Test
-    public void naoDeveTrazerLeiloesEncerradosNoPeriodo() {
-        Calendar comecoDoIntervalo = Calendar.getInstance();
-        comecoDoIntervalo.add(Calendar.DAY_OF_MONTH,-10);
-
-        Calendar fimDoIntervalo = Calendar.getInstance();
-
-        Usuario mauricio = new Usuario("Mauricio","mauricio@mauirioc.com.br");
-
-        Leilao leilao1 = new Leilao("XBox", 700.0, mauricio, false);
-        Calendar dataDoLeilao1 = Calendar.getInstance();
-        dataDoLeilao1.add(Calendar.DAY_OF_MONTH,-2);
-        leilao1.setDataAbertura(dataDoLeilao1);
-        leilao1.encerra();
-
-        usuarioDao.salvar(mauricio);
-        leilaoDao.salvar(leilao1);
-
-        List<Leilao> leiloes = leilaoDao.porPeriodo(comecoDoIntervalo,fimDoIntervalo);
-
-        Assert.assertEquals(0, leiloes.size());
-    }
-
-    @Test
-    public void deveTrazerLeiloesNaoEncerradosNoPeriodo2() {
-
         // criando as datas
         Calendar comecoDoIntervalo = Calendar.getInstance();
         comecoDoIntervalo.add(Calendar.DAY_OF_MONTH, -10);
         Calendar fimDoIntervalo = Calendar.getInstance();
-        Calendar dataDoLeilao1 = Calendar.getInstance();
-        dataDoLeilao1.add(Calendar.DAY_OF_MONTH, -2);
-        Calendar dataDoLeilao2 = Calendar.getInstance();
-        dataDoLeilao2.add(Calendar.DAY_OF_MONTH, -20);
 
         Usuario mauricio = new Usuario("Mauricio Aniche",
                 "mauricio@aniche.com.br");
 
         // criando os leiloes, cada um com uma data
-        Leilao leilao1 =
-                new Leilao("XBox", 700.0, mauricio, false);
-        leilao1.setDataAbertura(dataDoLeilao1);
-        Leilao leilao2 =
-                new Leilao("Geladeira", 1700.0, mauricio, false);
-        leilao2.setDataAbertura(dataDoLeilao2);
+        Leilao leilao1 = new LeilaoBuilder()
+                .diasAtras(2)
+                .comDono(mauricio)
+                .comNome("XBox")
+                .constroi();
+
+        Leilao leilao2 = new LeilaoBuilder()
+                .diasAtras(20)
+                .comDono(mauricio)
+                .comNome("XBox")
+                .constroi();
 
         // persistindo os objetos no banco
         usuarioDao.salvar(mauricio);
@@ -220,7 +199,7 @@ public class LeilaoDaoTest {
     }
 
     @Test
-    public void naoDeveTrazerLeiloesEncerradosNoPeriodo2() {
+    public void naoDeveTrazerLeiloesEncerradosNoPeriodo() {
 
         // criando as datas
         Calendar comecoDoIntervalo = Calendar.getInstance();
@@ -233,10 +212,12 @@ public class LeilaoDaoTest {
                 "mauricio@aniche.com.br");
 
         // criando os leiloes, cada um com uma data
-        Leilao leilao1 =
-                new Leilao("XBox", 700.0, mauricio, false);
-        leilao1.setDataAbertura(dataDoLeilao1);
-        leilao1.encerra();
+        Leilao leilao1 = new LeilaoBuilder()
+                .comDono(mauricio)
+                .diasAtras(2)
+                .comNome("XBox")
+                .encerrado()
+                .constroi();
 
         // persistindo os objetos no banco
         usuarioDao.salvar(mauricio);
@@ -249,6 +230,4 @@ public class LeilaoDaoTest {
         // garantindo que a query funcionou
         Assert.assertEquals(0, leiloes.size());
     }
-
-
 }
